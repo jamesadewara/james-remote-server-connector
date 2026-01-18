@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Server } from '@/types/server';
-import { fetchServers, addServer } from '@/data/mockServers';
+import { useServerMetrics } from '@/hooks/useServerMetrics';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { AddServerModal } from '@/components/layout/AddServerModal';
 import { ServerHeader } from '@/components/dashboard/ServerHeader';
@@ -15,37 +14,33 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Server as ServerIcon } from 'lucide-react';
 
 const Index = () => {
-  const [servers, setServers] = useState<Server[]>([]);
+  const { servers, isLoading, addServer, refreshServer, lastRefresh } = useServerMetrics({
+    refreshInterval: 3000, // Update every 3 seconds
+    enabled: true,
+  });
+  
   const [selectedServerId, setSelectedServerId] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
   const selectedServer = servers.find(s => s.id === selectedServerId);
 
+  // Auto-select first server when loaded
   useEffect(() => {
-    loadServers();
-  }, []);
-
-  const loadServers = async () => {
-    setIsLoading(true);
-    const data = await fetchServers();
-    setServers(data);
-    if (data.length > 0 && !selectedServerId) {
-      setSelectedServerId(data[0].id);
+    if (servers.length > 0 && !selectedServerId) {
+      setSelectedServerId(servers[0].id);
     }
-    setIsLoading(false);
-  };
+  }, [servers, selectedServerId]);
 
   const handleRefresh = async () => {
+    if (!selectedServerId) return;
     setIsRefreshing(true);
-    await loadServers();
-    setIsRefreshing(false);
+    refreshServer(selectedServerId);
+    setTimeout(() => setIsRefreshing(false), 300);
   };
 
   const handleAddServer = async (data: { name: string; hostname: string; ipAddress: string }) => {
     const newServer = await addServer(data);
-    setServers(prev => [...prev, newServer]);
     setSelectedServerId(newServer.id);
   };
 
