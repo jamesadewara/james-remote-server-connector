@@ -1,73 +1,25 @@
-# Welcome to your Lovable project
+# james-remote-server-connector: Remote Linux Monitor
 
-## Project info
+A lightweight, agentless server monitoring dashboard designed for developers to track the health and security of remote Linux environments in real-time.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+### 🚀 Overview
 
-## How can I edit this code?
+**james-remote-server-connector** bridges the gap between web development and system administration. It uses **OpenSSH** to securely connect to remote servers (Cloud VPS or local Vagrant instances) and execute lightweight Bash scripts to fetch performance metrics without requiring any pre-installed "agent" software on the target machine.
 
-There are several ways of editing your application.
+### 🛠️ Tech Stack
 
-**Use Lovable**
+- **UI/UX:** Designed with Lovable (React/Tailwind)
+- **Framework:** Next.js (Migrated from Vite for API Route support)
+- **Security:** `node-ssh` for encrypted communication.
+- **Auth:** SSH Public/Private Key Pair authentication (no passwords).
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+### 📋 Features & Roadmap
 
-Changes made via Lovable will be committed automatically to this repo.
+- [✔] **UI/UX Foundations:** High-fidelity dashboard design.
+- [✔] **Framework Migration:** Transitioned to Next.js for secure server-side SSH handling.
+- [ ] **Data Collection:** Finalizing Bash scripts for JSON-based metric reporting.
+- [ ] **Integration:** Connecting the frontend dashboard to the `node-ssh` backend.
 
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
-```
-
-**Edit a file directly in GitHub**
-
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
-
-**Use GitHub Codespaces**
-
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
-
-## What technologies are used for this project?
-
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+Accessibility:
+Live Url:
+Bash Script Repo:

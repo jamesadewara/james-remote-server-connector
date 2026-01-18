@@ -1,5 +1,8 @@
+"use client";
+
 import { useState, useEffect, useCallback } from 'react';
 import { Server } from '@/types/server';
+import { ServerStatus, ConnectionStatus } from '@/types/enums';
 import { mockServers } from '@/data/mockServers';
 
 // Simulate real-time metric fluctuations
@@ -18,7 +21,7 @@ const generateSecurityEvent = (serverId: string) => {
   ];
   const event = events[Math.floor(Math.random() * events.length)];
   const randomIp = `${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}`;
-  
+
   return {
     id: `s${Date.now()}`,
     type: event.type,
@@ -83,7 +86,7 @@ interface UseServerMetricsOptions {
 
 export const useServerMetrics = (options: UseServerMetricsOptions = {}) => {
   const { refreshInterval = 3000, enabled = true } = options;
-  
+
   const [servers, setServers] = useState<Server[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
@@ -105,7 +108,7 @@ export const useServerMetrics = (options: UseServerMetricsOptions = {}) => {
     if (!enabled || isLoading) return;
 
     const interval = setInterval(() => {
-      setServers(currentServers => 
+      setServers(currentServers =>
         currentServers.map(server => updateServerMetrics(server))
       );
       setLastRefresh(new Date());
@@ -114,36 +117,76 @@ export const useServerMetrics = (options: UseServerMetricsOptions = {}) => {
     return () => clearInterval(interval);
   }, [enabled, isLoading, refreshInterval]);
 
-  const addServer = useCallback(async (data: { name: string; hostname: string; ipAddress: string }) => {
-    await new Promise(resolve => setTimeout(resolve, 300));
-    
+  const addServer = useCallback(async (data: { name: string; hostname: string; ipAddress: string; sshPort: number; username: string; privateKey: string }) => {
+    // Initial state: Attempting connection
+    const newServerId = String(Date.now());
     const newServer: Server = {
-      id: String(Date.now()),
+      id: newServerId,
       name: data.name,
       hostname: data.hostname,
       ipAddress: data.ipAddress,
-      status: 'online',
-      os: 'Ubuntu 22.04 LTS',
-      kernel: '5.15.0-generic',
+      status: ServerStatus.OFFLINE, // Start offline until connected
+      connectionStatus: ConnectionStatus.ATTEMPTING,
+      os: 'Unknown',
+      kernel: 'Unknown',
       metrics: {
-        cpu: Math.random() * 50 + 10,
-        ram: { used: 4, total: 16, percentage: 25 },
-        disk: { used: 50, total: 200, percentage: 25 },
-        uptime: '0d 0h 1m',
-        loadAverage: [0.5, 0.3, 0.2],
+        cpu: 0,
+        ram: { used: 0, total: 0, percentage: 0 },
+        disk: { used: 0, total: 0, percentage: 0 },
+        uptime: '0d 0h 0m',
+        loadAverage: [0, 0, 0],
       },
       securityEvents: [],
-      processes: [
-        { pid: Math.floor(Math.random() * 10000), name: 'systemd', cpuPercent: 0.5, memPercent: 1.2, user: 'root' },
-        { pid: Math.floor(Math.random() * 10000), name: 'sshd', cpuPercent: 0.1, memPercent: 0.5, user: 'root' },
-      ],
-      commandLogs: [
-        { id: `c${Date.now()}`, command: 'uname -a', output: 'Linux ' + data.hostname + ' 5.15.0-generic', timestamp: new Date(), exitCode: 0 },
-      ],
+      processes: [],
+      commandLogs: [],
       lastUpdated: new Date(),
     };
 
     setServers(prev => [...prev, newServer]);
+
+    // Simulate SSH Handshake (2.5 seconds)
+    await new Promise(resolve => setTimeout(resolve, 2500));
+
+    // Success Simulation
+    setServers(currentServers =>
+      currentServers.map(server => {
+        if (server.id === newServerId) {
+          return {
+            ...server,
+            status: ServerStatus.ONLINE,
+            connectionStatus: ConnectionStatus.SUCCESS, // Briefly show success
+            os: 'Ubuntu 22.04 LTS',
+            kernel: '5.15.0-generic',
+            metrics: {
+              cpu: Math.random() * 50 + 10,
+              ram: { used: 4, total: 16, percentage: 25 },
+              disk: { used: 50, total: 200, percentage: 25 },
+              uptime: '0d 0h 1m',
+              loadAverage: [0.5, 0.3, 0.2],
+            },
+            processes: [
+              { pid: Math.floor(Math.random() * 10000), name: 'systemd', cpuPercent: 0.5, memPercent: 1.2, user: 'root' },
+              { pid: Math.floor(Math.random() * 10000), name: 'sshd', cpuPercent: 0.1, memPercent: 0.5, user: 'root' },
+            ],
+            commandLogs: [
+              { id: `c${Date.now()}`, command: 'uname -a', output: 'Linux ' + data.hostname + ' 5.15.0-generic', timestamp: new Date(), exitCode: 0 },
+            ],
+            lastUpdated: new Date(),
+          };
+        }
+        return server;
+      })
+    );
+
+    // Clear connection status after a delay
+    setTimeout(() => {
+      setServers(currentServers =>
+        currentServers.map(server =>
+          server.id === newServerId ? { ...server, connectionStatus: undefined } : server
+        )
+      );
+    }, 2000);
+
     return newServer;
   }, []);
 

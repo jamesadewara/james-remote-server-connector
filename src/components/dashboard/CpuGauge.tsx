@@ -1,3 +1,5 @@
+"use client";
+
 import { Activity } from 'lucide-react';
 
 interface CpuGaugeProps {
@@ -9,7 +11,7 @@ export const CpuGauge = ({ percentage }: CpuGaugeProps) => {
   const strokeWidth = 10;
   const circumference = 2 * Math.PI * radius;
   const strokeDashoffset = circumference - (percentage / 100) * circumference;
-  
+
   const getColor = () => {
     if (percentage >= 90) return 'hsl(0 84% 60%)';
     if (percentage >= 70) return 'hsl(38 92% 50%)';
@@ -22,7 +24,7 @@ export const CpuGauge = ({ percentage }: CpuGaugeProps) => {
         <Activity className="w-5 h-5 text-primary" />
         <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">CPU Usage</h3>
       </div>
-      
+
       <div className="flex items-center justify-center">
         <div className="relative">
           <svg width="180" height="180" className="transform -rotate-90">
@@ -56,7 +58,7 @@ export const CpuGauge = ({ percentage }: CpuGaugeProps) => {
           </div>
         </div>
       </div>
-      
+
       <div className="mt-4 flex justify-between text-xs text-muted-foreground">
         <span>0%</span>
         <span>50%</span>

@@ -1,4 +1,5 @@
 import { Server } from '@/types/server';
+import { ServerStatus } from '@/types/enums';
 
 export const mockServers: Server[] = [
   {
@@ -6,7 +7,7 @@ export const mockServers: Server[] = [
     name: 'Production Web',
     hostname: 'prod-web-01',
     ipAddress: '192.168.1.100',
-    status: 'online',
+    status: ServerStatus.ONLINE,
     os: 'Ubuntu 22.04 LTS',
     kernel: '5.15.0-91-generic',
     metrics: {
@@ -41,7 +42,7 @@ export const mockServers: Server[] = [
     name: 'Database Master',
     hostname: 'db-master-01',
     ipAddress: '192.168.1.101',
-    status: 'online',
+    status: ServerStatus.ONLINE,
     os: 'Debian 12',
     kernel: '6.1.0-17-amd64',
     metrics: {
@@ -70,7 +71,7 @@ export const mockServers: Server[] = [
     name: 'Staging API',
     hostname: 'staging-api-01',
     ipAddress: '192.168.1.102',
-    status: 'warning',
+    status: ServerStatus.WARNING,
     os: 'CentOS Stream 9',
     kernel: '5.14.0-362.el9',
     metrics: {
@@ -97,7 +98,7 @@ export const mockServers: Server[] = [
     name: 'Backup Server',
     hostname: 'backup-01',
     ipAddress: '192.168.1.103',
-    status: 'offline',
+    status: ServerStatus.OFFLINE,
     os: 'Rocky Linux 9',
     kernel: '5.14.0-284.el9',
     metrics: {
@@ -135,7 +136,7 @@ export const addServer = async (data: { name: string; hostname: string; ipAddres
     name: data.name,
     hostname: data.hostname,
     ipAddress: data.ipAddress,
-    status: 'online',
+    status: ServerStatus.ONLINE,
     os: 'Unknown',
     kernel: 'Unknown',
     metrics: {

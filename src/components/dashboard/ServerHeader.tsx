@@ -1,5 +1,8 @@
+"use client";
+
 import { Server as ServerType } from '@/types/server';
-import { Server, Wifi, WifiOff, AlertTriangle, RefreshCw } from 'lucide-react';
+import { ServerStatus, ConnectionStatus } from '@/types/enums';
+import { Server, Wifi, WifiOff, AlertTriangle, RefreshCw, Loader2, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -11,22 +14,40 @@ interface ServerHeaderProps {
 
 export const ServerHeader = ({ server, onRefresh, isRefreshing }: ServerHeaderProps) => {
   const getStatusBadge = () => {
+    if (server.connectionStatus === ConnectionStatus.ATTEMPTING) {
+      return (
+        <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/30">
+          <Loader2 className="w-4 h-4 text-primary animate-spin" />
+          <span className="text-sm font-medium text-primary">Connecting...</span>
+        </div>
+      );
+    }
+
+    if (server.connectionStatus === ConnectionStatus.HANDSHAKE_FAILED) {
+      return (
+        <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-destructive/10 border border-destructive/30">
+          <XCircle className="w-4 h-4 text-destructive" />
+          <span className="text-sm font-medium text-destructive">Handshake Failed</span>
+        </div>
+      );
+    }
+
     switch (server.status) {
-      case 'online':
+      case ServerStatus.ONLINE:
         return (
           <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-success/10 border border-success/30">
             <Wifi className="w-4 h-4 text-success" />
             <span className="text-sm font-medium text-success">Online</span>
           </div>
         );
-      case 'offline':
+      case ServerStatus.OFFLINE:
         return (
           <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-destructive/10 border border-destructive/30">
             <WifiOff className="w-4 h-4 text-destructive" />
             <span className="text-sm font-medium text-destructive">Offline</span>
           </div>
         );
-      case 'warning':
+      case ServerStatus.WARNING:
         return (
           <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-warning/10 border border-warning/30">
             <AlertTriangle className="w-4 h-4 text-warning" />

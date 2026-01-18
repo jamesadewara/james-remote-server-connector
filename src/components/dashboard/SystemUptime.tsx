@@ -1,3 +1,5 @@
+"use client";
+
 import { Clock, Server } from 'lucide-react';
 
 interface SystemUptimeProps {

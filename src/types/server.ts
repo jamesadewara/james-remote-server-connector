@@ -1,3 +1,5 @@
+import { ServerStatus, ConnectionStatus } from './enums';
+
 export interface ServerMetrics {
   cpu: number;
   ram: {
@@ -44,7 +46,9 @@ export interface Server {
   name: string;
   hostname: string;
   ipAddress: string;
-  status: 'online' | 'offline' | 'warning';
+  status: ServerStatus;
+  connectionStatus?: ConnectionStatus;
+  connectionError?: string;
   os: string;
   kernel: string;
   metrics: ServerMetrics;
@@ -60,4 +64,5 @@ export interface AddServerFormData {
   ipAddress: string;
   sshPort: number;
   username: string;
+  privateKey: string;
 }

@@ -1,3 +1,5 @@
+"use client";
+
 import { Shield, AlertTriangle, AlertCircle, Info } from 'lucide-react';
 import { SecurityEvent } from '@/types/server';
 import { ScrollArea } from '@/components/ui/scroll-area';

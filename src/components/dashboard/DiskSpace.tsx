@@ -1,3 +1,5 @@
+"use client";
+
 import { HardDrive } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 
@@ -33,8 +35,8 @@ export const DiskSpace = ({ used, total, percentage }: DiskSpaceProps) => {
         </div>
 
         <div className="space-y-2">
-          <Progress 
-            value={percentage} 
+          <Progress
+            value={percentage}
             className="h-3 bg-muted"
             indicatorClassName={getProgressColor()}
           />

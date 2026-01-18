@@ -1,6 +1,9 @@
+"use client";
+
 import { useState } from 'react';
 import { Server, Plus, Menu, X, Activity } from 'lucide-react';
 import { Server as ServerType } from '@/types/server';
+import { ServerStatus } from '@/types/enums';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -16,11 +19,11 @@ export const Sidebar = ({ servers, selectedServerId, onSelectServer, onAddServer
 
   const getStatusDot = (status: ServerType['status']) => {
     switch (status) {
-      case 'online':
+      case ServerStatus.ONLINE:
         return 'status-dot status-online';
-      case 'offline':
+      case ServerStatus.OFFLINE:
         return 'status-dot status-offline';
-      case 'warning':
+      case ServerStatus.WARNING:
         return 'status-dot bg-warning animate-pulse-slow';
     }
   };
@@ -37,7 +40,7 @@ export const Sidebar = ({ servers, selectedServerId, onSelectServer, onAddServer
 
       {/* Overlay */}
       {isOpen && (
-        <div 
+        <div
           className="lg:hidden fixed inset-0 bg-black/60 z-30"
           onClick={() => setIsOpen(false)}
         />
@@ -46,7 +49,7 @@ export const Sidebar = ({ servers, selectedServerId, onSelectServer, onAddServer
       {/* Sidebar */}
       <aside
         className={cn(
-          "fixed lg:static inset-y-0 left-0 z-40 w-72 bg-sidebar border-r border-sidebar-border transform transition-transform duration-300 ease-in-out flex flex-col",
+          "fixed lg:static inset-y-0 left-0 z-40 w-72 bg-sidebar border-r border-sidebar-border transform transition-transform duration-300 ease-in-out flex flex-col h-full",
           isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         )}
       >
@@ -108,8 +111,8 @@ export const Sidebar = ({ servers, selectedServerId, onSelectServer, onAddServer
 
         {/* Add Server Button */}
         <div className="p-4 border-t border-sidebar-border">
-          <Button 
-            onClick={onAddServer} 
+          <Button
+            onClick={onAddServer}
             className="w-full gap-2 bg-primary text-primary-foreground hover:bg-primary/90"
           >
             <Plus className="w-4 h-4" />

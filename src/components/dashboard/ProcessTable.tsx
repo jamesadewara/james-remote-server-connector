@@ -1,3 +1,5 @@
+"use client";
+
 import { Cpu } from 'lucide-react';
 import { Process } from '@/types/server';
 import {
@@ -46,8 +48,8 @@ export const ProcessTable = ({ processes }: ProcessTableProps) => {
               </TableRow>
             ) : (
               sortedProcesses.map((process) => (
-                <TableRow 
-                  key={process.pid} 
+                <TableRow
+                  key={process.pid}
                   className="border-border/30 hover:bg-secondary/50 transition-colors"
                 >
                   <TableCell className="font-mono text-sm text-muted-foreground">
@@ -58,20 +60,18 @@ export const ProcessTable = ({ processes }: ProcessTableProps) => {
                     <span className="block text-xs text-muted-foreground">{process.user}</span>
                   </TableCell>
                   <TableCell className="text-right">
-                    <span className={`font-mono ${
-                      process.cpuPercent >= 50 ? 'text-warning' : 
-                      process.cpuPercent >= 80 ? 'text-destructive' : 
-                      'text-foreground'
-                    }`}>
+                    <span className={`font-mono ${process.cpuPercent >= 50 ? 'text-warning' :
+                        process.cpuPercent >= 80 ? 'text-destructive' :
+                          'text-foreground'
+                      }`}>
                       {process.cpuPercent.toFixed(1)}%
                     </span>
                   </TableCell>
                   <TableCell className="text-right">
-                    <span className={`font-mono ${
-                      process.memPercent >= 50 ? 'text-warning' : 
-                      process.memPercent >= 80 ? 'text-destructive' : 
-                      'text-foreground'
-                    }`}>
+                    <span className={`font-mono ${process.memPercent >= 50 ? 'text-warning' :
+                        process.memPercent >= 80 ? 'text-destructive' :
+                          'text-foreground'
+                      }`}>
                       {process.memPercent.toFixed(1)}%
                     </span>
                   </TableCell>

@@ -1,3 +1,5 @@
+"use client";
+
 import { MemoryStick } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 
@@ -28,8 +30,8 @@ export const RamUsage = ({ used, total, percentage }: RamUsageProps) => {
         </div>
 
         <div className="space-y-2">
-          <Progress 
-            value={percentage} 
+          <Progress
+            value={percentage}
             className="h-3 bg-muted"
             indicatorClassName={getProgressColor()}
           />
