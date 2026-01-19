@@ -1,131 +1,274 @@
 "use client";
 
-import { useState, useEffect, useCallback } from 'react';
-import { Server } from '@/types/server';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { Server, AddServerFormData, SecurityEvent, Process } from '@/types/server';
 import { ServerStatus, ConnectionStatus } from '@/types/enums';
-import { mockServers } from '@/data/mockServers';
-
-// Simulate real-time metric fluctuations
-const simulateMetricChange = (current: number, min: number, max: number, variance: number): number => {
-  const change = (Math.random() - 0.5) * variance * 2;
-  const newValue = current + change;
-  return Math.max(min, Math.min(max, newValue));
-};
-
-const generateSecurityEvent = (serverId: string) => {
-  const events = [
-    { type: 'ufw_block' as const, message: 'Blocked incoming connection', severity: 'low' as const },
-    { type: 'ssh_attempt' as const, message: 'Failed SSH login attempt', severity: 'medium' as const },
-    { type: 'port_scan' as const, message: 'Port scan detected', severity: 'high' as const },
-    { type: 'auth_failure' as const, message: 'Authentication failure', severity: 'medium' as const },
-  ];
-  const event = events[Math.floor(Math.random() * events.length)];
-  const randomIp = `${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}`;
-
-  return {
-    id: `s${Date.now()}`,
-    type: event.type,
-    message: `${event.message} from ${randomIp}`,
-    timestamp: new Date(),
-    severity: event.severity,
-    sourceIp: randomIp,
-  };
-};
-
-const updateServerMetrics = (server: Server): Server => {
-  if (server.status === 'offline') return server;
-
-  const newCpu = simulateMetricChange(server.metrics.cpu, 5, 95, 8);
-  const newRamUsed = simulateMetricChange(server.metrics.ram.used, 1, server.metrics.ram.total * 0.95, 2);
-  const newDiskUsed = simulateMetricChange(server.metrics.disk.used, server.metrics.disk.used * 0.99, server.metrics.disk.total * 0.95, 0.5);
-
-  // Update processes with fluctuating CPU/MEM
-  const updatedProcesses = server.processes.map(proc => ({
-    ...proc,
-    cpuPercent: Math.max(0.1, simulateMetricChange(proc.cpuPercent, 0, 100, 3)),
-    memPercent: Math.max(0.1, simulateMetricChange(proc.memPercent, 0, 100, 1)),
-  }));
-
-  // Occasionally add a new security event (10% chance)
-  const shouldAddEvent = Math.random() < 0.1;
-  const securityEvents = shouldAddEvent
-    ? [generateSecurityEvent(server.id), ...server.securityEvents.slice(0, 9)]
-    : server.securityEvents;
-
-  return {
-    ...server,
-    metrics: {
-      ...server.metrics,
-      cpu: Math.round(newCpu * 10) / 10,
-      ram: {
-        ...server.metrics.ram,
-        used: Math.round(newRamUsed * 10) / 10,
-        percentage: Math.round((newRamUsed / server.metrics.ram.total) * 1000) / 10,
-      },
-      disk: {
-        ...server.metrics.disk,
-        used: Math.round(newDiskUsed * 10) / 10,
-        percentage: Math.round((newDiskUsed / server.metrics.disk.total) * 1000) / 10,
-      },
-      loadAverage: [
-        Math.round(simulateMetricChange(server.metrics.loadAverage[0], 0, 10, 0.3) * 100) / 100,
-        Math.round(simulateMetricChange(server.metrics.loadAverage[1], 0, 10, 0.2) * 100) / 100,
-        Math.round(simulateMetricChange(server.metrics.loadAverage[2], 0, 10, 0.1) * 100) / 100,
-      ] as [number, number, number],
-    },
-    processes: updatedProcesses,
-    securityEvents,
-    lastUpdated: new Date(),
-  };
-};
 
 interface UseServerMetricsOptions {
   refreshInterval?: number; // in milliseconds
   enabled?: boolean;
 }
 
+interface RawServerResponse {
+  _id: string;
+  name: string;
+  hostname: string;
+  ipAddress?: string;
+  username?: string;
+  password?: string; // Should be excluded by API but defined here for completeness if needed
+  port?: number;
+  status?: ServerStatus;
+  description?: string;
+  tags?: string[];
+  updatedAt: string;
+}
+
+interface MonitorApiResponse {
+  status: 'online' | 'offline';
+  metrics: Server['metrics'];
+  os: string;
+  kernel: string;
+  securityEvents: SecurityEvent[];
+  processes: Process[];
+  error?: string;
+}
+
 export const useServerMetrics = (options: UseServerMetricsOptions = {}) => {
-  const { refreshInterval = 3000, enabled = true } = options;
+  const { refreshInterval = 5000, enabled = true } = options;
 
   const [servers, setServers] = useState<Server[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
 
-  // Initial load
-  useEffect(() => {
-    const loadInitialData = async () => {
-      setIsLoading(true);
-      // Simulate initial fetch delay
-      await new Promise(resolve => setTimeout(resolve, 500));
-      setServers([...mockServers]);
+  const isPolling = useRef(false);
+
+  // 1. Initial Fetch
+  const fetchServers = async () => {
+    try {
+      const res = await fetch('/api/servers');
+      if (!res.ok) throw new Error('Failed to fetch servers');
+      const data: RawServerResponse[] = await res.json();
+
+      const hydratedServers: Server[] = data.map((s) => ({
+        id: s._id,
+        name: s.name,
+        hostname: s.hostname,
+        ipAddress: s.ipAddress || s.hostname,
+        username: s.username || 'root',
+        port: s.port || 22,
+        status: s.status || ServerStatus.OFFLINE,
+        description: s.description,
+        tags: s.tags || [],
+        connectionStatus: ConnectionStatus.DISCONNECTED,
+        os: 'Unknown',
+        kernel: 'Unknown',
+        metrics: {
+          cpu: 0,
+          ram: { used: 0, total: 16, percentage: 0 },
+          disk: { used: 0, total: 100, percentage: 0 },
+          uptime: '0d 0h 0m',
+          loadAverage: [0, 0, 0]
+        },
+        securityEvents: [],
+        processes: [],
+        commandLogs: [],
+        lastUpdated: new Date(s.updatedAt)
+      }));
+
+      setServers(hydratedServers);
+    } catch (error) {
+      console.error("Error fetching servers:", error);
+    } finally {
       setIsLoading(false);
-    };
-    loadInitialData();
+    }
+  };
+
+  useEffect(() => {
+    fetchServers();
   }, []);
 
-  // Real-time updates
-  useEffect(() => {
-    if (!enabled || isLoading) return;
+  // Helper to fetch single server metrics
+  const fetchSingleServerMetrics = async (server: Server): Promise<Partial<Server> | null> => {
+    try {
+      const res = await fetch('/api/monitor-server', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ serverId: server.id })
+      });
 
-    const interval = setInterval(() => {
-      setServers(currentServers =>
-        currentServers.map(server => updateServerMetrics(server))
-      );
+      if (!res.ok) throw new Error('Poll failed');
+      const data: MonitorApiResponse | { error: string } = await res.json();
+
+      if ('error' in data && data.error) {
+        throw new Error(data.error);
+      }
+
+      // Cast safely since we checked error
+      const validData = data as MonitorApiResponse;
+
+      if (validData.status === 'online') {
+        return {
+          id: server.id,
+          status: ServerStatus.ONLINE,
+          connectionStatus: ConnectionStatus.SUCCESS,
+          metrics: validData.metrics,
+          os: validData.os,
+          kernel: validData.kernel,
+          securityEvents: validData.securityEvents,
+          processes: validData.processes,
+          lastUpdated: new Date(),
+          connectionError: undefined // Clear error on success
+        };
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Connection failed';
+      return {
+        id: server.id,
+        status: ServerStatus.OFFLINE,
+        connectionStatus: ConnectionStatus.ERROR,
+        connectionError: errorMessage
+      };
+    }
+    return null;
+  };
+
+  // 2. Poll Metrics
+  const pollMetrics = useCallback(async () => {
+    if (servers.length === 0 || isPolling.current) return;
+
+    isPolling.current = true;
+
+    try {
+      const updates = await Promise.all(servers.map(async (server) => {
+        return fetchSingleServerMetrics(server);
+      }));
+
+      setServers(prev => prev.map(s => {
+        const update = updates.find(u => u && u.id === s.id);
+        if (update) {
+          return { ...s, ...update };
+        }
+        return s;
+      }));
+
       setLastRefresh(new Date());
-    }, refreshInterval);
 
-    return () => clearInterval(interval);
-  }, [enabled, isLoading, refreshInterval]);
+    } catch (err) {
+      console.error("Polling error", err);
+    } finally {
+      isPolling.current = false;
+    }
+  }, [servers]);
 
-  const addServer = useCallback(async (data: { name: string; hostname: string; ipAddress: string; sshPort: number; username: string; privateKey: string }) => {
-    // Initial state: Attempting connection
-    const newServerId = String(Date.now());
+  // 3. Refresh Server (Manual)
+  const refreshServer = useCallback(async (serverId: string) => {
+    // 1. "Disconnect" / Clear State
+    setServers(prev => prev.map(s => {
+      if (s.id === serverId) {
+        return {
+          ...s,
+          status: ServerStatus.UNKNOWN,
+          connectionStatus: ConnectionStatus.ATTEMPTING,
+          metrics: {
+            cpu: 0,
+            ram: { used: 0, total: 0, percentage: 0 },
+            disk: { used: 0, total: 0, percentage: 0 },
+            uptime: 'Resyncing...',
+            loadAverage: [0, 0, 0],
+          },
+          securityEvents: [], // Clear logs
+          processes: [],      // Clear processes
+          commandLogs: []
+        };
+      }
+      return s;
+    }));
+
+    // 2. Force Reconnect / Poll
+    try {
+      const res = await fetch('/api/monitor-server', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ serverId })
+      });
+
+      if (!res.ok) throw new Error('Refresh failed');
+      const data: MonitorApiResponse = await res.json();
+
+      setServers(prev => prev.map(s => {
+        if (s.id === serverId) {
+          if (data.status === 'online') {
+            return {
+              ...s,
+              status: ServerStatus.ONLINE,
+              connectionStatus: ConnectionStatus.SUCCESS,
+              metrics: data.metrics,
+              os: data.os,
+              kernel: data.kernel,
+              securityEvents: data.securityEvents,
+              processes: data.processes,
+              lastUpdated: new Date()
+            };
+          } else {
+            return {
+              ...s,
+              status: ServerStatus.OFFLINE,
+              connectionStatus: ConnectionStatus.ERROR
+            };
+          }
+        }
+        return s;
+      }));
+
+    } catch {
+      setServers(prev => prev.map(s => {
+        if (s.id === serverId) {
+          return {
+            ...s,
+            status: ServerStatus.OFFLINE,
+            connectionStatus: ConnectionStatus.ERROR
+          };
+        }
+        return s;
+      }));
+    }
+
+  }, []);
+
+  // CRUD Implementations
+  const addServer = useCallback(async (data: AddServerFormData) => {
+    const res = await fetch('/api/servers', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: data.name,
+        hostname: data.hostname,
+        privateKey: data.privateKey,
+        password: data.password,
+        username: data.username || 'root',
+        port: data.sshPort || 22,
+        description: data.description,
+        tags: data.tags
+      })
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Failed to add server');
+    }
+
+    const newDbServer: RawServerResponse = await res.json();
+
     const newServer: Server = {
-      id: newServerId,
-      name: data.name,
-      hostname: data.hostname,
-      ipAddress: data.ipAddress,
-      status: ServerStatus.OFFLINE, // Start offline until connected
+      id: newDbServer._id,
+      name: newDbServer.name,
+      hostname: newDbServer.hostname,
+      ipAddress: newDbServer.ipAddress || newDbServer.hostname,
+      username: newDbServer.username || 'root',
+      port: newDbServer.port || 22,
+      description: newDbServer.description,
+      tags: newDbServer.tags || [],
+      status: ServerStatus.OFFLINE,
       connectionStatus: ConnectionStatus.ATTEMPTING,
       os: 'Unknown',
       kernel: 'Unknown',
@@ -133,7 +276,7 @@ export const useServerMetrics = (options: UseServerMetricsOptions = {}) => {
         cpu: 0,
         ram: { used: 0, total: 0, percentage: 0 },
         disk: { used: 0, total: 0, percentage: 0 },
-        uptime: '0d 0h 0m',
+        uptime: '-',
         loadAverage: [0, 0, 0],
       },
       securityEvents: [],
@@ -142,67 +285,57 @@ export const useServerMetrics = (options: UseServerMetricsOptions = {}) => {
       lastUpdated: new Date(),
     };
 
-    setServers(prev => [...prev, newServer]);
-
-    // Simulate SSH Handshake (2.5 seconds)
-    await new Promise(resolve => setTimeout(resolve, 2500));
-
-    // Success Simulation
-    setServers(currentServers =>
-      currentServers.map(server => {
-        if (server.id === newServerId) {
-          return {
-            ...server,
-            status: ServerStatus.ONLINE,
-            connectionStatus: ConnectionStatus.SUCCESS, // Briefly show success
-            os: 'Ubuntu 22.04 LTS',
-            kernel: '5.15.0-generic',
-            metrics: {
-              cpu: Math.random() * 50 + 10,
-              ram: { used: 4, total: 16, percentage: 25 },
-              disk: { used: 50, total: 200, percentage: 25 },
-              uptime: '0d 0h 1m',
-              loadAverage: [0.5, 0.3, 0.2],
-            },
-            processes: [
-              { pid: Math.floor(Math.random() * 10000), name: 'systemd', cpuPercent: 0.5, memPercent: 1.2, user: 'root' },
-              { pid: Math.floor(Math.random() * 10000), name: 'sshd', cpuPercent: 0.1, memPercent: 0.5, user: 'root' },
-            ],
-            commandLogs: [
-              { id: `c${Date.now()}`, command: 'uname -a', output: 'Linux ' + data.hostname + ' 5.15.0-generic', timestamp: new Date(), exitCode: 0 },
-            ],
-            lastUpdated: new Date(),
-          };
-        }
-        return server;
-      })
-    );
-
-    // Clear connection status after a delay
-    setTimeout(() => {
-      setServers(currentServers =>
-        currentServers.map(server =>
-          server.id === newServerId ? { ...server, connectionStatus: undefined } : server
-        )
-      );
-    }, 2000);
-
+    setServers(prev => [newServer, ...prev]);
     return newServer;
   }, []);
 
-  const refreshServer = useCallback((serverId: string) => {
-    setServers(currentServers =>
-      currentServers.map(server =>
-        server.id === serverId ? updateServerMetrics(server) : server
-      )
-    );
+  const deleteServer = useCallback(async (serverId: string) => {
+    const res = await fetch(`/api/servers/${serverId}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error('Failed to delete server');
+    setServers(prev => prev.filter(s => s.id !== serverId));
   }, []);
+
+  const updateServer = useCallback(async (serverId: string, data: Partial<AddServerFormData>) => {
+    const res = await fetch(`/api/servers/${serverId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...data,
+        port: data.sshPort // Map sshPort to port
+      })
+    });
+    if (!res.ok) throw new Error('Failed to update server');
+    const updatedDbServer: RawServerResponse = await res.json();
+
+    setServers(prev => prev.map(s => {
+      if (s.id === serverId) {
+        return {
+          ...s,
+          name: updatedDbServer.name,
+          hostname: updatedDbServer.hostname,
+          username: updatedDbServer.username || 'root',
+          port: updatedDbServer.port || 22,
+          description: updatedDbServer.description,
+          tags: updatedDbServer.tags || [],
+        };
+      }
+      return s;
+    }));
+  }, []);
+
+  useEffect(() => {
+    if (!enabled || isLoading) return;
+    const interval = setInterval(pollMetrics, refreshInterval);
+    return () => clearInterval(interval);
+  }, [enabled, isLoading, refreshInterval, pollMetrics]);
 
   return {
     servers,
     isLoading,
     lastRefresh,
     addServer,
+    deleteServer,
+    updateServer,
     refreshServer,
   };
 };

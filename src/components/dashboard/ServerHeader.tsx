@@ -82,21 +82,28 @@ export const ServerHeader = ({ server, onRefresh, isRefreshing }: ServerHeaderPr
         </div>
       </div>
 
-      <div className="flex items-center gap-4">
-        {getStatusBadge()}
-        <div className="hidden sm:block text-right">
-          <div className="text-xs text-muted-foreground">Last Updated</div>
-          <div className="text-sm text-foreground">{formatLastUpdated(server.lastUpdated)}</div>
+      <div className="flex flex-col items-end gap-2">
+        <div className="flex items-center gap-4">
+          {getStatusBadge()}
+          <div className="hidden sm:block text-right">
+            <div className="text-xs text-muted-foreground">Last Updated</div>
+            <div className="text-sm text-foreground">{formatLastUpdated(server.lastUpdated)}</div>
+          </div>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={onRefresh}
+            disabled={isRefreshing}
+            className="border-border hover:bg-secondary hover:border-primary"
+          >
+            <RefreshCw className={cn("w-4 h-4", isRefreshing && "animate-spin")} />
+          </Button>
         </div>
-        <Button
-          variant="outline"
-          size="icon"
-          onClick={onRefresh}
-          disabled={isRefreshing}
-          className="border-border hover:bg-secondary hover:border-primary"
-        >
-          <RefreshCw className={cn("w-4 h-4", isRefreshing && "animate-spin")} />
-        </Button>
+        {server.connectionError && (
+          <p className="text-xs text-destructive font-medium animate-pulse">
+            {server.connectionError}
+          </p>
+        )}
       </div>
     </div>
   );

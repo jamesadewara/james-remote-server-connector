@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useServerMetrics } from '@/hooks/useServerMetrics';
-import { AddServerFormData } from '@/types/server';
+import { AddServerFormData, Server } from '@/types/server';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { AddServerModal } from '@/components/layout/AddServerModal';
 import { ServerHeader } from '@/components/dashboard/ServerHeader';
@@ -15,10 +15,11 @@ import { ProcessTable } from '@/components/dashboard/ProcessTable';
 import { TerminalOutput } from '@/components/dashboard/TerminalOutput';
 import LoadingSkeleton from '@/components/subui/LoadingSkeleton';
 import EmptyState from '@/components/subui/EmptyState';
+import { toast } from 'sonner';
 
 const Main: React.FC = () => {
-    const { servers, isLoading, addServer, refreshServer, lastRefresh } = useServerMetrics({
-        refreshInterval: 3000, // Update every 3 seconds
+    const { servers, isLoading, addServer, deleteServer, updateServer, refreshServer } = useServerMetrics({
+        refreshInterval: 5000,
         enabled: true,
     });
 
@@ -26,19 +27,23 @@ const Main: React.FC = () => {
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
-    const selectedServer = servers.find(s => s.id === selectedServerId);
+    // Edit Mode State
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [serverToEdit, setServerToEdit] = useState<Server | null>(null);
 
-    // Auto-select first server when loaded
-    useEffect(() => {
-        if (servers.length > 0 && !selectedServerId) {
-            setSelectedServerId(servers[0].id);
-        }
-    }, [servers, selectedServerId]);
+    // Derived state
+    // If selected ID is valid, use it. Else fallback to first. 
+    // Need to ensure selectedId actually exists in list (deletion safety)
+    const activeServerId = (selectedServerId && servers.find(s => s.id === selectedServerId))
+        ? selectedServerId
+        : servers[0]?.id ?? null;
+
+    const selectedServer = servers.find(s => s.id === activeServerId);
 
     const handleRefresh = async () => {
-        if (!selectedServerId) return;
+        if (!activeServerId) return;
         setIsRefreshing(true);
-        refreshServer(selectedServerId);
+        refreshServer(activeServerId);
         setTimeout(() => setIsRefreshing(false), 300);
     };
 
@@ -47,13 +52,41 @@ const Main: React.FC = () => {
         setSelectedServerId(newServer.id);
     };
 
+    const handleEditServerTrigger = (server: Server) => {
+        setServerToEdit(server);
+        setIsEditModalOpen(true);
+    };
+
+    const handleEditServerSubmit = async (data: AddServerFormData) => {
+        if (!serverToEdit) return;
+        await updateServer(serverToEdit.id, data);
+        setServerToEdit(null);
+        // Toast is handled in Modal, but we wait here implicitly
+    };
+
+    const handleDeleteServer = async (id: string) => {
+        if (confirm('Are you sure you want to delete this server?')) {
+            try {
+                await deleteServer(id);
+                toast.success('Server deleted');
+                if (selectedServerId === id) {
+                    setSelectedServerId(null);
+                }
+            } catch {
+                toast.error('Failed to delete server');
+            }
+        }
+    };
+
     return (
         <div className="flex h-screen overflow-hidden bg-background">
             <Sidebar
                 servers={servers}
-                selectedServerId={selectedServerId}
+                selectedServerId={activeServerId}
                 onSelectServer={setSelectedServerId}
                 onAddServer={() => setIsAddModalOpen(true)}
+                onEditServer={handleEditServerTrigger}
+                onDeleteServer={handleDeleteServer}
             />
 
             <main className="flex-1 p-4 lg:p-8 overflow-y-auto lg:ml-0 ml-0 pt-16 lg:pt-8">
@@ -102,10 +135,32 @@ const Main: React.FC = () => {
                 )}
             </main>
 
+            {/* Add Modal */}
             <AddServerModal
                 isOpen={isAddModalOpen}
                 onClose={() => setIsAddModalOpen(false)}
                 onAdd={handleAddServer}
+            />
+
+            {/* Edit Modal (Reusing AddServerModal) */}
+            <AddServerModal
+                isOpen={isEditModalOpen}
+                onClose={() => {
+                    setIsEditModalOpen(false);
+                    setServerToEdit(null);
+                }}
+                onAdd={handleEditServerSubmit}
+                isEditing={true}
+                initialData={serverToEdit ? {
+                    name: serverToEdit.name,
+                    hostname: serverToEdit.hostname,
+                    ipAddress: serverToEdit.ipAddress,
+                    privateKey: '', // Intentionally empty
+                    username: serverToEdit.username || 'root',
+                    sshPort: serverToEdit.port || 22,
+                    description: serverToEdit.description,
+                    tags: serverToEdit.tags.join(', ')
+                } : undefined}
             />
         </div>
     );

@@ -1,20 +1,35 @@
 "use client";
 
 import { useState } from 'react';
-import { Server, Plus, Menu, X, Activity } from 'lucide-react';
+import { Server, Plus, Menu, X, Activity, MoreVertical, Trash2, Edit } from 'lucide-react';
 import { Server as ServerType } from '@/types/server';
 import { ServerStatus } from '@/types/enums';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface SidebarProps {
   servers: ServerType[];
   selectedServerId: string | null;
   onSelectServer: (id: string) => void;
   onAddServer: () => void;
+  onEditServer?: (server: ServerType) => void;
+  onDeleteServer?: (id: string) => void;
 }
 
-export const Sidebar = ({ servers, selectedServerId, onSelectServer, onAddServer }: SidebarProps) => {
+export const Sidebar = ({
+  servers,
+  selectedServerId,
+  onSelectServer,
+  onAddServer,
+  onEditServer,
+  onDeleteServer
+}: SidebarProps) => {
   const [isOpen, setIsOpen] = useState(false);
 
   const getStatusDot = (status: ServerType['status']) => {
@@ -23,8 +38,8 @@ export const Sidebar = ({ servers, selectedServerId, onSelectServer, onAddServer
         return 'status-dot status-online';
       case ServerStatus.OFFLINE:
         return 'status-dot status-offline';
-      case ServerStatus.WARNING:
-        return 'status-dot bg-warning animate-pulse-slow';
+      case 'unknown':
+        return 'status-dot bg-gray-500';
     }
   };
 
@@ -77,34 +92,55 @@ export const Sidebar = ({ servers, selectedServerId, onSelectServer, onAddServer
 
           <div className="space-y-2">
             {servers.map((server) => (
-              <button
+              <div
                 key={server.id}
-                onClick={() => {
-                  onSelectServer(server.id);
-                  setIsOpen(false);
-                }}
                 className={cn(
-                  "w-full p-3 rounded-lg flex items-center gap-3 transition-all duration-200",
+                  "group relative w-full p-3 rounded-lg flex items-center gap-3 transition-all duration-200 cursor-pointer",
                   selectedServerId === server.id
                     ? "bg-sidebar-accent border border-primary/30 gold-glow"
                     : "hover:bg-sidebar-accent/50 border border-transparent"
                 )}
+                onClick={() => {
+                  onSelectServer(server.id);
+                  setIsOpen(false);
+                }}
               >
                 <div className={getStatusDot(server.status)} />
                 <Server className={cn(
                   "w-4 h-4",
                   selectedServerId === server.id ? "text-primary" : "text-muted-foreground"
                 )} />
-                <div className="flex-1 text-left">
+                <div className="flex-1 text-left overflow-hidden">
                   <div className={cn(
-                    "text-sm font-medium",
+                    "text-sm font-medium truncate",
                     selectedServerId === server.id ? "text-primary" : "text-sidebar-foreground"
                   )}>
                     {server.name}
                   </div>
-                  <div className="text-xs text-muted-foreground">{server.ipAddress}</div>
+                  <div className="text-xs text-muted-foreground truncate">{server.hostname}</div>
                 </div>
-              </button>
+
+                {/* Context Menu for Actions */}
+                <div className="opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-6 w-6">
+                        <MoreVertical className="w-4 h-4 text-muted-foreground" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => onEditServer?.(server)}>
+                        <Edit className="w-4 h-4 mr-2" />
+                        Edit
+                      </DropdownMenuItem>
+                      <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => onDeleteServer?.(server.id)}>
+                        <Trash2 className="w-4 h-4 mr-2" />
+                        Delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </div>
             ))}
           </div>
         </div>
