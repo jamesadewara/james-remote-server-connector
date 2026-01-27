@@ -1,23 +1,14 @@
 import { NextResponse } from 'next/server';
 import { NodeSSH } from 'node-ssh';
-import dbConnect from '@/lib/db';
-import Server from '@/models/Server';
 
 export async function POST(req: Request) {
     const ssh = new NodeSSH();
 
     try {
-        const { serverId } = await req.json();
-
-        if (!serverId) {
-            return NextResponse.json({ error: 'Server ID is required' }, { status: 400 });
-        }
-
-        await dbConnect();
-        const server = await Server.findById(serverId);
+        const { server } = await req.json();
 
         if (!server) {
-            return NextResponse.json({ error: 'Server not found' }, { status: 404 });
+            return NextResponse.json({ error: 'Server details are required' }, { status: 400 });
         }
 
         if ((!server.privateKey && !server.password) || !server.hostname) {

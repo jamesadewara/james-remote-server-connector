@@ -152,6 +152,7 @@ const Main: React.FC = () => {
                 onAdd={handleEditServerSubmit}
                 isEditing={true}
                 initialData={serverToEdit ? {
+                    id: serverToEdit.id,
                     name: serverToEdit.name,
                     hostname: serverToEdit.hostname,
                     ipAddress: serverToEdit.ipAddress,

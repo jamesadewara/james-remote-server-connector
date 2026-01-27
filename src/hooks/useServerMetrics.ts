@@ -1,26 +1,13 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Server, AddServerFormData, SecurityEvent, Process } from '@/types/server';
+import { Server, AddServerFormData } from '@/types/server';
 import { ServerStatus, ConnectionStatus } from '@/types/enums';
+import { LocalStorageService } from '@/lib/storage';
 
 interface UseServerMetricsOptions {
   refreshInterval?: number; // in milliseconds
   enabled?: boolean;
-}
-
-interface RawServerResponse {
-  _id: string;
-  name: string;
-  hostname: string;
-  ipAddress?: string;
-  username?: string;
-  password?: string; // Should be excluded by API but defined here for completeness if needed
-  port?: number;
-  status?: ServerStatus;
-  description?: string;
-  tags?: string[];
-  updatedAt: string;
 }
 
 interface MonitorApiResponse {
@@ -28,8 +15,8 @@ interface MonitorApiResponse {
   metrics: Server['metrics'];
   os: string;
   kernel: string;
-  securityEvents: SecurityEvent[];
-  processes: Process[];
+  securityEvents: Server['securityEvents'];
+  processes: Server['processes'];
   error?: string;
 }
 
@@ -43,57 +30,29 @@ export const useServerMetrics = (options: UseServerMetricsOptions = {}) => {
   const isPolling = useRef(false);
 
   // 1. Initial Fetch
-  const fetchServers = async () => {
+  const fetchServers = useCallback(() => {
     try {
-      const res = await fetch('/api/servers');
-      if (!res.ok) throw new Error('Failed to fetch servers');
-      const data: RawServerResponse[] = await res.json();
-
-      const hydratedServers: Server[] = data.map((s) => ({
-        id: s._id,
-        name: s.name,
-        hostname: s.hostname,
-        ipAddress: s.ipAddress || s.hostname,
-        username: s.username || 'root',
-        port: s.port || 22,
-        status: s.status || ServerStatus.OFFLINE,
-        description: s.description,
-        tags: s.tags || [],
-        connectionStatus: ConnectionStatus.DISCONNECTED,
-        os: 'Unknown',
-        kernel: 'Unknown',
-        metrics: {
-          cpu: 0,
-          ram: { used: 0, total: 16, percentage: 0 },
-          disk: { used: 0, total: 100, percentage: 0 },
-          uptime: '0d 0h 0m',
-          loadAverage: [0, 0, 0]
-        },
-        securityEvents: [],
-        processes: [],
-        commandLogs: [],
-        lastUpdated: new Date(s.updatedAt)
-      }));
-
-      setServers(hydratedServers);
+      const storedServers = LocalStorageService.getServers();
+      setServers(storedServers);
     } catch (error) {
       console.error("Error fetching servers:", error);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchServers();
-  }, []);
+  }, [fetchServers]);
 
   // Helper to fetch single server metrics
   const fetchSingleServerMetrics = async (server: Server): Promise<Partial<Server> | null> => {
     try {
+      // Send FULL server object (including secrets) to the stateless monitor API
       const res = await fetch('/api/monitor-server', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ serverId: server.id })
+        body: JSON.stringify({ server })
       });
 
       if (!res.ok) throw new Error('Poll failed');
@@ -107,8 +66,7 @@ export const useServerMetrics = (options: UseServerMetricsOptions = {}) => {
       const validData = data as MonitorApiResponse;
 
       if (validData.status === 'online') {
-        return {
-          id: server.id,
+        const update = {
           status: ServerStatus.ONLINE,
           connectionStatus: ConnectionStatus.SUCCESS,
           metrics: validData.metrics,
@@ -119,15 +77,20 @@ export const useServerMetrics = (options: UseServerMetricsOptions = {}) => {
           lastUpdated: new Date(),
           connectionError: undefined // Clear error on success
         };
+        // Update storage silently
+        LocalStorageService.updateServerMetrics(server.id, update);
+        return { id: server.id, ...update };
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Connection failed';
-      return {
-        id: server.id,
+      const update = {
         status: ServerStatus.OFFLINE,
         connectionStatus: ConnectionStatus.ERROR,
         connectionError: errorMessage
       };
+      // Update storage silently
+      LocalStorageService.updateServerMetrics(server.id, update);
+      return { id: server.id, ...update };
     }
     return null;
   };
@@ -163,6 +126,9 @@ export const useServerMetrics = (options: UseServerMetricsOptions = {}) => {
   // 3. Refresh Server (Manual)
   const refreshServer = useCallback(async (serverId: string) => {
     // 1. "Disconnect" / Clear State
+    const serverToRefresh = servers.find(s => s.id === serverId);
+    if (!serverToRefresh) return;
+
     setServers(prev => prev.map(s => {
       if (s.id === serverId) {
         return {
@@ -176,20 +142,21 @@ export const useServerMetrics = (options: UseServerMetricsOptions = {}) => {
             uptime: 'Resyncing...',
             loadAverage: [0, 0, 0],
           },
-          securityEvents: [], // Clear logs
-          processes: [],      // Clear processes
+          securityEvents: [],
+          processes: [],
           commandLogs: []
         };
       }
       return s;
     }));
 
-    // 2. Force Reconnect / Poll
+    // 2. Force Reconnect
     try {
+      // Use the LATEST server state from state/storage
       const res = await fetch('/api/monitor-server', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ serverId })
+        body: JSON.stringify({ server: serverToRefresh })
       });
 
       if (!res.ok) throw new Error('Refresh failed');
@@ -198,8 +165,7 @@ export const useServerMetrics = (options: UseServerMetricsOptions = {}) => {
       setServers(prev => prev.map(s => {
         if (s.id === serverId) {
           if (data.status === 'online') {
-            return {
-              ...s,
+            const update = {
               status: ServerStatus.ONLINE,
               connectionStatus: ConnectionStatus.SUCCESS,
               metrics: data.metrics,
@@ -209,12 +175,15 @@ export const useServerMetrics = (options: UseServerMetricsOptions = {}) => {
               processes: data.processes,
               lastUpdated: new Date()
             };
+            LocalStorageService.updateServerMetrics(serverId, update);
+            return { ...s, ...update };
           } else {
-            return {
-              ...s,
+            const update = {
               status: ServerStatus.OFFLINE,
               connectionStatus: ConnectionStatus.ERROR
             };
+            LocalStorageService.updateServerMetrics(serverId, update);
+            return { ...s, ...update };
           }
         }
         return s;
@@ -223,105 +192,39 @@ export const useServerMetrics = (options: UseServerMetricsOptions = {}) => {
     } catch {
       setServers(prev => prev.map(s => {
         if (s.id === serverId) {
-          return {
-            ...s,
+          const update = {
             status: ServerStatus.OFFLINE,
             connectionStatus: ConnectionStatus.ERROR
           };
+          LocalStorageService.updateServerMetrics(serverId, update);
+          return { ...s, ...update };
         }
         return s;
       }));
     }
 
-  }, []);
+  }, [servers]);
 
   // CRUD Implementations
   const addServer = useCallback(async (data: AddServerFormData) => {
-    const res = await fetch('/api/servers', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        name: data.name,
-        hostname: data.hostname,
-        privateKey: data.privateKey,
-        password: data.password,
-        username: data.username || 'root',
-        port: data.sshPort || 22,
-        description: data.description,
-        tags: data.tags
-      })
-    });
-
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.error || 'Failed to add server');
-    }
-
-    const newDbServer: RawServerResponse = await res.json();
-
-    const newServer: Server = {
-      id: newDbServer._id,
-      name: newDbServer.name,
-      hostname: newDbServer.hostname,
-      ipAddress: newDbServer.ipAddress || newDbServer.hostname,
-      username: newDbServer.username || 'root',
-      port: newDbServer.port || 22,
-      description: newDbServer.description,
-      tags: newDbServer.tags || [],
-      status: ServerStatus.OFFLINE,
-      connectionStatus: ConnectionStatus.ATTEMPTING,
-      os: 'Unknown',
-      kernel: 'Unknown',
-      metrics: {
-        cpu: 0,
-        ram: { used: 0, total: 0, percentage: 0 },
-        disk: { used: 0, total: 0, percentage: 0 },
-        uptime: '-',
-        loadAverage: [0, 0, 0],
-      },
-      securityEvents: [],
-      processes: [],
-      commandLogs: [],
-      lastUpdated: new Date(),
-    };
-
+    const newServer = LocalStorageService.addServer(data);
     setServers(prev => [newServer, ...prev]);
+    // Trigger immediate poll
+    setTimeout(() => refreshServer(newServer.id), 100);
     return newServer;
-  }, []);
+  }, [refreshServer]);
 
   const deleteServer = useCallback(async (serverId: string) => {
-    const res = await fetch(`/api/servers/${serverId}`, { method: 'DELETE' });
-    if (!res.ok) throw new Error('Failed to delete server');
+    LocalStorageService.deleteServer(serverId);
     setServers(prev => prev.filter(s => s.id !== serverId));
   }, []);
 
   const updateServer = useCallback(async (serverId: string, data: Partial<AddServerFormData>) => {
-    const res = await fetch(`/api/servers/${serverId}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        ...data,
-        port: data.sshPort // Map sshPort to port
-      })
-    });
-    if (!res.ok) throw new Error('Failed to update server');
-    const updatedDbServer: RawServerResponse = await res.json();
-
-    setServers(prev => prev.map(s => {
-      if (s.id === serverId) {
-        return {
-          ...s,
-          name: updatedDbServer.name,
-          hostname: updatedDbServer.hostname,
-          username: updatedDbServer.username || 'root',
-          port: updatedDbServer.port || 22,
-          description: updatedDbServer.description,
-          tags: updatedDbServer.tags || [],
-        };
-      }
-      return s;
-    }));
-  }, []);
+    const updated = LocalStorageService.updateServer(serverId, data);
+    setServers(prev => prev.map(s => s.id === serverId ? updated : s));
+    // Trigger check with new details
+    setTimeout(() => refreshServer(serverId), 100);
+  }, [refreshServer]);
 
   useEffect(() => {
     if (!enabled || isLoading) return;
@@ -339,3 +242,4 @@ export const useServerMetrics = (options: UseServerMetricsOptions = {}) => {
     refreshServer,
   };
 };
+

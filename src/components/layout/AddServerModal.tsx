@@ -20,7 +20,7 @@ interface AddServerModalProps {
   isOpen: boolean;
   onClose: () => void;
   onAdd: (data: AddServerFormData) => Promise<void>; // Used for both Add and Update (generic submit)
-  initialData?: AddServerFormData;
+  initialData?: AddServerFormData & { id?: string };
   isEditing?: boolean;
 }
 
@@ -40,21 +40,23 @@ export const AddServerModal = ({ isOpen, onClose, onAdd, initialData, isEditing 
   useEffect(() => {
     if (isOpen) {
       if (isEditing && initialData) {
-        setFormData({
+        setFormData(prev => ({
+          ...prev, // Keep existing edits if any (though usually we overwrite on open)
           ...initialData,
-          hostname: initialData.hostname || initialData.ipAddress || '', // map back
+          hostname: initialData.hostname || initialData.ipAddress || '',
           privateKey: '', // Don't show existing key
-          password: undefined, // Default to Key mode. TODO: Detect auth type from server
+          password: undefined,
           username: initialData.username || 'root',
           sshPort: initialData.sshPort || 22,
-        });
+        }));
         setReplaceKey(false);
-      } else {
+      } else if (!isEditing) {
+        // Only reset if we are explicitly in "Add" mode
         setFormData({
           name: '',
           hostname: '',
           privateKey: '',
-          password: undefined, // Start in Key mode
+          password: undefined,
           username: 'root',
           sshPort: 22,
           description: '',
@@ -63,7 +65,8 @@ export const AddServerModal = ({ isOpen, onClose, onAdd, initialData, isEditing 
         setReplaceKey(false);
       }
     }
-  }, [isOpen, isEditing, initialData]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, isEditing, initialData?.id]); // Only re-run if ID changes or modal opens/closes
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
