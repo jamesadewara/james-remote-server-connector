@@ -32,9 +32,10 @@ export const SecurityEvents = ({ events }: SecurityEventsProps) => {
     }
   };
 
-  const formatTimestamp = (date: Date) => {
+  const formatTimestamp = (date: Date | string) => {
     const now = new Date();
-    const diff = now.getTime() - date.getTime();
+    const eventDate = new Date(date);
+    const diff = now.getTime() - eventDate.getTime();
     const minutes = Math.floor(diff / 60000);
     if (minutes < 60) return `${minutes}m ago`;
     const hours = Math.floor(minutes / 60);

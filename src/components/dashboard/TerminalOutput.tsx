@@ -9,8 +9,8 @@ interface TerminalOutputProps {
 }
 
 export const TerminalOutput = ({ logs }: TerminalOutputProps) => {
-  const formatTimestamp = (date: Date) => {
-    return date.toLocaleTimeString('en-US', {
+  const formatTimestamp = (date: Date | string) => {
+    return new Date(date).toLocaleTimeString('en-US', {
       hour12: false,
       hour: '2-digit',
       minute: '2-digit',

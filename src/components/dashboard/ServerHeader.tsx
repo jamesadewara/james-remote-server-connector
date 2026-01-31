@@ -57,8 +57,8 @@ export const ServerHeader = ({ server, onRefresh, isRefreshing }: ServerHeaderPr
     }
   };
 
-  const formatLastUpdated = (date: Date) => {
-    return date.toLocaleString('en-US', {
+  const formatLastUpdated = (date: Date | string) => {
+    return new Date(date).toLocaleString('en-US', {
       month: 'short',
       day: 'numeric',
       hour: '2-digit',

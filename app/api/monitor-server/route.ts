@@ -1,6 +1,14 @@
 import { NextResponse } from 'next/server';
 import { NodeSSH } from 'node-ssh';
 
+interface SecurityEvent {
+    id: string;
+    type: string;
+    message: string;
+    timestamp: Date;
+    severity: string;
+}
+
 export async function POST(req: Request) {
     const ssh = new NodeSSH();
 
@@ -36,11 +44,31 @@ export async function POST(req: Request) {
         }
 
         // Helper to safely execute command
+        // Track executed commands
+        const commandLogs: { id: string; command: string; output: string; timestamp: Date; exitCode: number }[] = [];
+
+        // Helper to safely execute command
         const execSafe = async (cmd: string) => {
             try {
-                return await ssh.execCommand(cmd);
-            } catch {
-                return { stdout: '', stderr: 'Command failed' };
+                const res = await ssh.execCommand(cmd);
+                commandLogs.push({
+                    id: `cmd-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                    command: cmd,
+                    output: res.stdout || res.stderr || '(no output)',
+                    timestamp: new Date(),
+                    exitCode: res.code || 0
+                });
+                return res;
+            } catch (err) {
+                const errMsg = err instanceof Error ? err.message : 'Command failed';
+                commandLogs.push({
+                    id: `cmd-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                    command: cmd,
+                    output: errMsg,
+                    timestamp: new Date(),
+                    exitCode: 1
+                });
+                return { stdout: '', stderr: errMsg };
             }
         };
 
@@ -51,19 +79,43 @@ export async function POST(req: Request) {
         const cmdUptime = `uptime -p`;
         const cmdKernel = `uname -r`;
         const cmdOs = `grep PRETTY_NAME /etc/os-release | cut -d= -f2 | tr -d '"'`;
-        const cmdLogsText = `journalctl -t sshd -t sudo -t auth -n 5 --no-pager --reverse --output=short-iso`;
-        const cmdProcesses = `ps -eo pid,comm,%cpu,%mem,user --sort=-%cpu | head -n 6`;
 
-        const [cpuRes, ramRes, diskRes, uptimeRes, kernelRes, osRes, logsRes, procRes] = await Promise.all([
+        // Security Logs Strategy: Try journalctl -> auth.log -> last
+        // specific commands are defined dynamically below based on results
+
+        const cmdProcesses = `ps -eo pid,comm,%cpu,%mem,user --sort=-%cpu | head -n 6`;
+        const cmdLoad = `cat /proc/loadavg`;
+
+        const [cpuRes, ramRes, diskRes, uptimeRes, kernelRes, osRes, procRes, loadRes] = await Promise.all([
             execSafe(cmdCpu),
             execSafe(cmdRam),
             execSafe(cmdDisk),
             execSafe(cmdUptime),
             execSafe(cmdKernel),
             execSafe(cmdOs),
-            execSafe(cmdLogsText),
-            execSafe(cmdProcesses)
+            execSafe(cmdProcesses),
+            execSafe(cmdLoad)
         ]);
+
+        // Attempt Security Logs (Sequential Fallback)
+        let logsOutput = '';
+        let logsCmdUsed = `journalctl -t sshd -t sudo -t auth -n 10 --no-pager --reverse --output=short-iso`;
+        let logsRes = await execSafe(logsCmdUsed);
+
+        // 2. Fallback: /var/log/auth.log (tail)
+        if (!logsRes.stdout && (logsRes.stderr.includes('Permission denied') || logsRes.stderr.includes('No logs'))) {
+            logsCmdUsed = `tail -n 10 /var/log/auth.log 2>/dev/null`;
+            logsRes = await execSafe(logsCmdUsed);
+        }
+
+        // 3. Fallback: last -n 10
+        if (!logsRes.stdout) {
+            logsCmdUsed = `last -n 10`;
+            logsRes = await execSafe(logsCmdUsed);
+        }
+
+        logsOutput = logsRes.stdout;
+
 
         ssh.dispose();
 
@@ -89,15 +141,33 @@ export async function POST(req: Request) {
         const diskPercent = diskTotalMb ? (diskUsedMb / diskTotalMb) * 100 : 0;
 
         // Logs
-        const securityEvents = logsRes.stdout.split('\n').filter(Boolean).map((line, idx) => {
-            return {
-                id: `log-${Date.now()}-${idx}`,
-                type: (line.includes('sshd') ? 'ssh_attempt' : 'auth_failure') as 'ssh_attempt' | 'auth_failure' | 'ufw_block' | 'port_scan',
-                message: line,
+        let securityEvents: SecurityEvent[] = [];
+
+        if (logsOutput) {
+            const lines = logsOutput.split('\n').filter(Boolean);
+            securityEvents = lines.map((line, idx) => {
+                // Simple heateristic for severity
+                const isHigh = line.includes('Fail') || line.includes('error') || line.includes('invalid') || line.includes('BREAK-IN');
+                const type = line.includes('sshd') ? 'ssh_attempt' : 'auth_failure'; // simplified
+
+                return {
+                    id: `log-${Date.now()}-${idx}`,
+                    type: type,
+                    message: line.substring(0, 120), // Truncate
+                    timestamp: new Date(), // We don't parse historical dates perfectly here to avoid complex regex for now
+                    severity: isHigh ? 'high' : 'medium'
+                };
+            });
+        } else {
+            // If absolutely nothing, add a status event
+            securityEvents.push({
+                id: 'no-logs',
+                type: 'auth_failure',
+                message: 'Could not access system logs (Permission Denied). Try running as root or adding user to adm group.',
                 timestamp: new Date(),
-                severity: (line.includes('Fail') || line.includes('error') ? 'high' : 'medium') as 'high' | 'medium' | 'low',
-            };
-        });
+                severity: 'low'
+            });
+        }
 
         // Processes
         const processes = procRes.stdout.split('\n').slice(1).filter(Boolean).map(line => {
@@ -124,7 +194,7 @@ export async function POST(req: Request) {
                 percentage: Math.round(diskPercent * 10) / 10,
             },
             uptime: uptimeRes.stdout.trim() || 'Unknown',
-            loadAverage: [0, 0, 0] as [number, number, number]
+            loadAverage: (loadRes.stdout.trim().split(' ').slice(0, 3).map(n => parseFloat(n) || 0) as [number, number, number]) || [0, 0, 0]
         };
 
         return NextResponse.json({
@@ -133,7 +203,8 @@ export async function POST(req: Request) {
             os: osRes.stdout.trim() || 'Linux',
             kernel: kernelRes.stdout.trim() || 'Unknown',
             securityEvents: securityEvents.slice(0, 10),
-            processes: processes
+            processes: processes,
+            commandLogs: commandLogs.reverse().slice(0, 50)
         });
 
     } catch (error: unknown) {

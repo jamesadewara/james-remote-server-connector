@@ -17,6 +17,7 @@ interface MonitorApiResponse {
   kernel: string;
   securityEvents: Server['securityEvents'];
   processes: Server['processes'];
+  commandLogs: Server['commandLogs'];
   error?: string;
 }
 
@@ -74,6 +75,7 @@ export const useServerMetrics = (options: UseServerMetricsOptions = {}) => {
           kernel: validData.kernel,
           securityEvents: validData.securityEvents,
           processes: validData.processes,
+          commandLogs: validData.commandLogs,
           lastUpdated: new Date(),
           connectionError: undefined // Clear error on success
         };
