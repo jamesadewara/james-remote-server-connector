@@ -100,9 +100,15 @@ export const ServerHeader = ({ server, onRefresh, isRefreshing }: ServerHeaderPr
           </Button>
         </div>
         {server.connectionError && (
-          <p className="text-xs text-destructive font-medium animate-pulse">
-            {server.connectionError}
-          </p>
+          <div className="absolute top-16 right-0 z-10 animate-fade-in-down w-full sm:w-auto sm:max-w-md">
+            <div className="flex items-start gap-3 p-3 text-sm text-destructive rounded-lg border border-destructive/20 bg-destructive/5 shadow-lg backdrop-blur-md">
+              <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="font-semibold mb-1">Connection Error</p>
+                <p className="opacity-90 leading-relaxed">{server.connectionError}</p>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </div>

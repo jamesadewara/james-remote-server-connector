@@ -73,9 +73,9 @@ export const useServerMetrics = (options: UseServerMetricsOptions = {}) => {
           metrics: validData.metrics,
           os: validData.os,
           kernel: validData.kernel,
-          securityEvents: validData.securityEvents,
+          securityEvents: validData.securityEvents.map(e => ({ ...e, timestamp: new Date(e.timestamp) })),
           processes: validData.processes,
-          commandLogs: validData.commandLogs,
+          commandLogs: validData.commandLogs.map(l => ({ ...l, timestamp: new Date(l.timestamp) })),
           lastUpdated: new Date(),
           connectionError: undefined // Clear error on success
         };
@@ -173,8 +173,9 @@ export const useServerMetrics = (options: UseServerMetricsOptions = {}) => {
               metrics: data.metrics,
               os: data.os,
               kernel: data.kernel,
-              securityEvents: data.securityEvents,
+              securityEvents: data.securityEvents.map(e => ({ ...e, timestamp: new Date(e.timestamp) })),
               processes: data.processes,
+              commandLogs: (data.commandLogs || []).map(l => ({ ...l, timestamp: new Date(l.timestamp) })),
               lastUpdated: new Date()
             };
             LocalStorageService.updateServerMetrics(serverId, update);

@@ -9,6 +9,18 @@ interface RawServer extends Omit<Server, 'lastUpdated' | 'securityEvents' | 'com
     commandLogs?: (Omit<CommandLog, 'timestamp'> & { timestamp: string })[];
 }
 
+const generateUUID = () => {
+    // Fallback for environments without secure context or crypto
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+        return crypto.randomUUID();
+    }
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+        const r = Math.random() * 16 | 0;
+        const v = c === 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+    });
+};
+
 export const LocalStorageService = {
     getServers: (): Server[] => {
         if (typeof window === 'undefined') return [];
@@ -31,13 +43,17 @@ export const LocalStorageService = {
 
     saveServers: (servers: Server[]) => {
         if (typeof window === 'undefined') return;
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(servers));
+        try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(servers));
+        } catch (e) {
+            console.error('Failed to save to localStorage', e);
+        }
     },
 
     addServer: (data: AddServerFormData): Server => {
         const servers = LocalStorageService.getServers();
         const newServer: Server = {
-            id: crypto.randomUUID(),
+            id: generateUUID(),
             name: data.name,
             hostname: data.hostname,
             ipAddress: data.hostname, // Default to hostname until resolved
