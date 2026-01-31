@@ -23,7 +23,8 @@ export async function POST(req: Request) {
                 port: server.port || 22,
                 privateKey: server.privateKey,
                 password: server.password,
-                readyTimeout: 10000,
+                tryKeyboard: true,
+                readyTimeout: 30000,
             });
         } catch (connErr: unknown) {
             const msg = connErr instanceof Error ? connErr.message : String(connErr);
