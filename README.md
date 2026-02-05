@@ -1,4 +1,4 @@
-# james-remote-server-connector: Remote Linux Monitor
+# Linux Health Dashboard: Remote Linux Monitor
 
 A lightweight, agentless server monitoring dashboard designed for developers to track the health and security of remote Linux environments in real-time.
 
@@ -23,11 +23,3 @@ A lightweight, agentless server monitoring dashboard designed for developers to 
 #### Accessibility
 
 **Live Url**: `https://james-remote-server-dashboard.netlify.app/`
-
-#### Important "Ethical Hacking" Tip for Online Servers
-
-When you move from Vagrant (Local) to an Online Server, security is much more dangerous:
-
-    - UFW is Mandatory: The moment your server goes online, bots will try to SSH into it. Run sudo ufw allow 22 and sudo ufw enable immediately.
-    - Disable Passwords: Ensure your /etc/ssh/sshd_config has PasswordAuthentication no. This forces the server to only accept your SSH Key.
-    - Monitor Logs: Use your dashboard to watch for failed login attempts. You will likely see hundreds of IPs from around the world trying to guess your password—this is great data for your "Security Logs" feature!
